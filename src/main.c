@@ -10,6 +10,8 @@ void *__dso_handle = 0;
 #include <stm32f10x_gpio.h>
 #include <stm32f10x_usart.h>
 #include "gps.h"
+#include <stdio.h>
+#include <stdint.h>
 
 #define I2C_BUS_CLOCK_SPEED 100000
 
@@ -41,7 +43,7 @@ void TX(uint64_t freq, uint8_t * txBuffer)
 
 void usart_gps_send_byte(uint8_t data)
 {
-    return;
+    return; // UNCOMMENT FOR DEBUG ONLY
     while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET) {}
     USART_SendData(USART1, data);
     while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET) {}
@@ -56,30 +58,61 @@ void usart_gps_send_string(const char *str)
 
 void gps_power_enable() 
 {
+#ifdef CONFIG_SIMPLE_POWER_MANAGMENT
     GPIO_SetBits(GPIOB, GPIO_Pin_4);
     GPIO_SetBits(GPIOB, GPIO_Pin_5);
     GPIO_SetBits(GPIOB, GPIO_Pin_6);
     GPIO_SetBits(GPIOB, GPIO_Pin_7);
+#else
+    GPIO_InitTypeDef gpio_init;
+    
+    gpio_init.GPIO_Pin = GPIO_Pin_7;
+    gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &gpio_init);
+
+    GPIO_ResetBits(GPIOB, GPIO_Pin_7);
+#endif
 
     USART_Cmd(USART1, ENABLE);
 }
 
 void gps_power_disable() 
 {
+#ifdef CONFIG_SIMPLE_POWER_MANAGMENT
     GPIO_ResetBits(GPIOB, GPIO_Pin_4);
     GPIO_ResetBits(GPIOB, GPIO_Pin_5);
     GPIO_ResetBits(GPIOB, GPIO_Pin_6);
     GPIO_ResetBits(GPIOB, GPIO_Pin_7);
+#else
+    GPIO_InitTypeDef gpio_init;
+
+    gpio_init.GPIO_Pin = GPIO_Pin_7;
+    gpio_init.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    gpio_init.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &gpio_init);
+#endif
 
     USART_Cmd(USART1, DISABLE);
 }
 
 void si5351_power_enable() 
 {
+#ifdef CONFIG_SIMPLE_POWER_MANAGMENT
     GPIO_SetBits(GPIOA, GPIO_Pin_1);
     GPIO_SetBits(GPIOA, GPIO_Pin_2);
     GPIO_SetBits(GPIOA, GPIO_Pin_3);
     GPIO_SetBits(GPIOA, GPIO_Pin_4);
+#else
+    GPIO_InitTypeDef gpio_init;
+
+    gpio_init.GPIO_Pin = GPIO_Pin_1;
+    gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &gpio_init);
+
+    GPIO_ResetBits(GPIOA, GPIO_Pin_1);
+#endif
 
     i2c_init(I2C_BUS_CLOCK_SPEED);
 
@@ -107,10 +140,19 @@ void si5351_power_enable()
 
 void si5351_power_disable() 
 {
+#ifdef CONFIG_SIMPLE_POWER_MANAGMENT
     GPIO_ResetBits(GPIOA, GPIO_Pin_1);
     GPIO_ResetBits(GPIOA, GPIO_Pin_2);
     GPIO_ResetBits(GPIOA, GPIO_Pin_3);
     GPIO_ResetBits(GPIOA, GPIO_Pin_4);
+#else
+    GPIO_InitTypeDef gpio_init;
+
+    gpio_init.GPIO_Pin = GPIO_Pin_1;
+    gpio_init.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    gpio_init.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &gpio_init);
+#endif
 
     i2c_uninit();
 }
@@ -127,6 +169,20 @@ int main(void)
 
     si5351_power_disable();
     gps_power_disable();
+
+#ifndef CONFIG_SIMPLE_POWER_MANAGMENT
+    GPIO_ResetBits(GPIOB, GPIO_Pin_8);
+
+    delay_ms(1000);
+
+    while (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_5) != Bit_SET) {
+        delay_ms(250);
+    }
+
+    GPIO_SetBits(GPIOB, GPIO_Pin_8);
+
+    delay_ms(1000);
+#endif
 
     delay_ms(250);
 

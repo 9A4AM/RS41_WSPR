@@ -351,6 +351,16 @@ uint32_t wspr_call_hash(const char *call)
     uint32_t a, b, c;
     char CallWithSuPrefix[11];
     uint8_t Length = strlen(call);
+
+    for (int i = 0; i < 6; i++)
+    {
+        if (call[i] == ' ')
+        {
+            Length = i;
+            break;
+        }
+    }
+
     strcpy(CallWithSuPrefix, call);
 
 #ifdef CONFIG_WSPR_SUFFIX

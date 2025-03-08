@@ -6,6 +6,7 @@
 #include <misc.h>
 
 #include "delay.h"
+#include "config.h"
 
 volatile bool done;
 
@@ -18,8 +19,12 @@ void delay_init()
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
     RCC_APB1PeriphResetCmd(RCC_APB1Periph_TIM3, DISABLE);
 
-    // tim_init.TIM_Prescaler = 24 - 1; // 24 MHz
+    #ifndef CONFIG_STM32_CLOCK_6MHZ
+    tim_init.TIM_Prescaler = 24 - 1; // 24 MHz
+    #else
     tim_init.TIM_Prescaler = 6 - 1; // 6 MHz
+    #endif
+
     tim_init.TIM_CounterMode = TIM_CounterMode_Up;
     tim_init.TIM_Period = 0;
     tim_init.TIM_ClockDivision = TIM_CKD_DIV1;

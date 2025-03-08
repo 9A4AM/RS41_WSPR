@@ -9,13 +9,14 @@
 #include <misc.h>
 
 #include "system.h"
+#include "config.h"
 #include "delay.h"
 
 #define BUTTON_PRESS_LONG_COUNT SYSTEM_SCHEDULER_TIMER_TICKS_PER_SECOND
 
 #define ADC1_DR_Address ((uint32_t) 0x4001244C)
 
-__IO uint16_t dma_buffer_adc[2];
+__IO uint16_t dma_buffer_adc[1];
 
 volatile uint32_t button_pressed = 0;
 
@@ -46,8 +47,11 @@ static void rcc_init()
     FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
     FLASH_SetLatency(FLASH_Latency_0);
 
-    // RCC_HCLKConfig(RCC_SYSCLK_Div1); // 24 MHz
+    #ifndef CONFIG_STM32_CLOCK_6MHZ
+    RCC_HCLKConfig(RCC_SYSCLK_Div1); // 24 MHz
+    #else
     RCC_HCLKConfig(RCC_SYSCLK_Div4); // 6 MHz
+    #endif
 
     RCC_PCLK1Config(RCC_HCLK_Div1);
     RCC_PCLK2Config(RCC_HCLK_Div1);
@@ -68,6 +72,7 @@ static void gpio_init()
 
     GPIO_InitTypeDef gpio_init;
 
+#ifdef CONFIG_SIMPLE_POWER_MANAGMENT
     // GPS power at PB4 PB5 PB6 PB7
     gpio_init.GPIO_Pin = GPIO_Pin_4;
     gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
@@ -109,6 +114,27 @@ static void gpio_init()
     gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
     gpio_init.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_Init(GPIOA, &gpio_init);
+#endif
+
+    // // PV voltage at PA5
+    // gpio_init.GPIO_Pin = GPIO_Pin_5;
+    // gpio_init.GPIO_Mode = GPIO_Mode_AIN;
+    // gpio_init.GPIO_Speed = GPIO_Speed_10MHz;
+    // GPIO_Init(GPIOA, &gpio_init);
+
+#ifndef CONFIG_SIMPLE_POWER_MANAGMENT
+    // External trigger at PA6
+    gpio_init.GPIO_Pin = GPIO_Pin_5;
+    gpio_init.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    gpio_init.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &gpio_init);   
+
+    // Converter at PB8
+    gpio_init.GPIO_Pin = GPIO_Pin_8;
+    gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &gpio_init);
+#endif
 }
 
 /**
@@ -151,7 +177,6 @@ static void dma_adc_init()
     ADC_Init(ADC1, &adc_init);
 
     ADC_RegularChannelConfig(ADC1, ADC_Channel_5, 1, ADC_SampleTime_28Cycles5);
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_6, 2, ADC_SampleTime_28Cycles5);
 
     // ADC1 DMA requests are routed to DMA1 Channel1
     ADC_DMACmd(ADC1, ENABLE);
@@ -185,8 +210,12 @@ void system_scheduler_timer_init()
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
     RCC_APB1PeriphResetCmd(RCC_APB1Periph_TIM4, DISABLE);
 
-    // tim_init.TIM_Prescaler = 24 - 1; // tick every 1/1000000 s 24 MHz
+    #ifndef CONFIG_STM32_CLOCK_6MHZ
+    tim_init.TIM_Prescaler = 24 - 1; // tick every 1/1000000 s 24 MHz
+    #else
     tim_init.TIM_Prescaler = 6 - 1; // tick every 1/1000000 s 6 MHz
+    #endif
+
     tim_init.TIM_CounterMode = TIM_CounterMode_Up;
     tim_init.TIM_Period = 100 - 1; // update every 1/10000 s
     tim_init.TIM_ClockDivision = TIM_CKD_DIV1;
@@ -238,7 +267,7 @@ void system_init()
     rcc_init();
     nvic_init();
     gpio_init();
-    dma_adc_init();
+    // dma_adc_init(); not required by now
     delay_init();
 
     system_scheduler_timer_init();
@@ -248,7 +277,11 @@ void system_init()
 
     delay_ms(100);
 
-    SysTick_Config(SystemCoreClock / 10000);
+    #ifndef CONFIG_STM32_CLOCK_6MHZ
+    SysTick_Config(SystemCoreClock / 10000); // 24 MHz
+    #else
+    SysTick_Config(SystemCoreClock / 10000 / 4); // 6 MHz
+    #endif
 }
 
 uint32_t system_get_tick()
